@@ -3,8 +3,21 @@ const fs = require('fs');
 const path = require('path');
 const bcrypt = require('bcryptjs');
 
-// Use Render's persistent disk in production, local dir otherwise
-const DB_DIR = process.env.NODE_ENV === 'production' ? '/data' : __dirname;
+// Use /data in production (Render persistent disk), fallback to __dirname
+function resolveDbDir() {
+  if (process.env.NODE_ENV === 'production') {
+    const prodDir = '/data';
+    try {
+      if (!fs.existsSync(prodDir)) fs.mkdirSync(prodDir, { recursive: true });
+      return prodDir;
+    } catch (e) {
+      console.warn('⚠️  Cannot use /data, falling back to local dir:', e.message);
+    }
+  }
+  return __dirname;
+}
+
+const DB_DIR = resolveDbDir();
 const DB_PATH = path.join(DB_DIR, 'exam_portal.db');
 
 let db; // sql.js Database instance
