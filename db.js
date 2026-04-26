@@ -3,7 +3,9 @@ const fs = require('fs');
 const path = require('path');
 const bcrypt = require('bcryptjs');
 
-const DB_PATH = path.join(__dirname, 'exam_portal.db');
+// Use Render's persistent disk in production, local dir otherwise
+const DB_DIR = process.env.NODE_ENV === 'production' ? '/data' : __dirname;
+const DB_PATH = path.join(DB_DIR, 'exam_portal.db');
 
 let db; // sql.js Database instance
 
