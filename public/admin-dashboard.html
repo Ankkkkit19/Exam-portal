@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Admin Dashboard — ExamPortal</title>
+  <link rel="stylesheet" href="style.css"/>
+</head>
+<body class="dashboard">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-icon">🎓</div>
+      <div><h2>ExamPortal</h2><span>Admin Panel</span></div>
+    </div>
+    <nav class="sidebar-nav">
+      <a href="admin-dashboard.html" class="active"><span class="nav-icon">📊</span>Dashboard</a>
+      <a href="manage-quizzes.html"><span class="nav-icon">📝</span>Manage Quizzes</a>
+      <a href="results.html"><span class="nav-icon">📈</span>All Results</a>
+    </nav>
+    <div class="sidebar-footer">
+      <a href="#" id="logoutBtn"><span>🚪</span>Logout</a>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main class="main-content">
+    <div class="page-header">
+      <div>
+        <h1>Dashboard Overview</h1>
+        <p>Welcome back, Administrator</p>
+      </div>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-icon blue">📝</div>
+        <div><div class="stat-value" id="totalQuizzes">—</div><div class="stat-label">Total Quizzes</div></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon purple">🎓</div>
+        <div><div class="stat-value" id="totalStudents">—</div><div class="stat-label">Registered Students</div></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon green">✅</div>
+        <div><div class="stat-value" id="totalAttempts">—</div><div class="stat-label">Total Attempts</div></div>
+      </div>
+    </div>
+
+    <!-- Recent Results Table -->
+    <div class="card">
+      <div class="card-header">
+        <h2>📋 Recent Attempts</h2>
+        <a href="results.html" class="btn btn-secondary btn-sm">View All</a>
+      </div>
+      <div class="card-body">
+        <div class="table-wrapper">
+          <table id="recentTable">
+            <thead>
+              <tr>
+                <th>Student</th><th>Roll No</th><th>Quiz</th><th>Score</th><th>Date</th>
+              </tr>
+            </thead>
+            <tbody id="recentBody">
+              <tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:32px">Loading...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    // Auth guard
+    fetch('/api/auth/check-session').then(r=>r.json()).then(d=>{
+      if(!d.loggedIn || d.role!=='admin') location.href='/admin-login.html';
+    });
+
+    document.getElementById('logoutBtn').addEventListener('click', async e => {
+      e.preventDefault();
+      await fetch('/api/auth/logout');
+      location.href='/admin-login.html';
+    });
+
+    async function loadStats(){
+      const res = await fetch('/api/quizzes/stats');
+      const d = await res.json();
+      document.getElementById('totalQuizzes').textContent = d.totalQuizzes;
+      document.getElementById('totalStudents').textContent = d.totalStudents;
+      document.getElementById('totalAttempts').textContent = d.totalAttempts;
+    }
+
+    async function loadRecent(){
+      const res = await fetch('/api/results/all');
+      const d = await res.json();
+      const tbody = document.getElementById('recentBody');
+      if(!d.results || d.results.length===0){
+        tbody.innerHTML='<tr><td colspan="5"><div class="empty-state"><div class="empty-icon">📭</div><h3>No attempts yet</h3></div></td></tr>';
+        return;
+      }
+      const recent = d.results.slice(0,10);
+      tbody.innerHTML = recent.map(r=>{
+        const pct = Math.round((r.score/r.total)*100);
+        const badge = pct>=60 ? 'badge-pass' : 'badge-fail';
+        const date = new Date(r.attempted_at).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
+        return `<tr>
+          <td><strong>${r.student_name}</strong></td>
+          <td><span class="badge badge-primary">${r.roll_no}</span></td>
+          <td>${r.quiz_title}</td>
+          <td><span class="badge ${badge}">${r.score}/${r.total} (${pct}%)</span></td>
+          <td>${date}</td>
+        </tr>`;
+      }).join('');
+    }
+
+    loadStats(); loadRecent();
+  </script>
+</body>
+</html>

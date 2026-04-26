@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Student Registration — ExamPortal</title>
+  <link rel="stylesheet" href="style.css"/>
+</head>
+<body class="auth-page">
+  <div class="auth-card">
+    <div class="auth-logo">
+      <div class="icon">🎓</div>
+      <div><h1>ExamPortal</h1><span>Create Account</span></div>
+    </div>
+    <h2>Register as Student</h2>
+    <p class="subtitle">Create your account to start taking quizzes</p>
+
+    <form id="registerForm">
+      <div class="form-group">
+        <label for="name">Full Name</label>
+        <input type="text" id="name" placeholder="Your full name" autocomplete="name" required/>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="roll_no">Roll Number</label>
+          <input type="text" id="roll_no" placeholder="e.g. CS2021001" required/>
+        </div>
+        <div class="form-group">
+          <label for="email">Email Address</label>
+          <input type="email" id="email" placeholder="your@email.com" autocomplete="email" required/>
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="password">Password</label>
+        <input type="password" id="password" placeholder="Min 6 characters" autocomplete="new-password" minlength="6" required/>
+      </div>
+      <div id="alert" class="alert"></div>
+      <button type="submit" class="btn btn-primary" id="submitBtn">✅ Create Account</button>
+    </form>
+
+    <div class="auth-footer">
+      Already have an account? <a href="/student-login.html">Sign in here</a>
+    </div>
+  </div>
+
+  <script>
+    fetch('/api/auth/check-session').then(r=>r.json()).then(d=>{
+      if(d.loggedIn && d.role==='student') location.href='/student-dashboard.html';
+    });
+
+    document.getElementById('registerForm').addEventListener('submit', async e=>{
+      e.preventDefault();
+      const btn = document.getElementById('submitBtn');
+      const alertEl = document.getElementById('alert');
+      btn.innerHTML='<div class="spinner"></div> Creating account...'; btn.disabled=true;
+      alertEl.className='alert';
+
+      const res = await fetch('/api/auth/student-register',{
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({
+          name: document.getElementById('name').value,
+          email: document.getElementById('email').value,
+          password: document.getElementById('password').value,
+          roll_no: document.getElementById('roll_no').value
+        })
+      });
+      const d = await res.json();
+      if(d.success){
+        alertEl.className='alert alert-success show'; alertEl.textContent='✅ Account created! Redirecting...';
+        setTimeout(()=>location.href='/student-dashboard.html',800);
+      } else {
+        alertEl.className='alert alert-error show'; alertEl.textContent='❌ '+d.message;
+        btn.innerHTML='✅ Create Account'; btn.disabled=false;
+      }
+    });
+  </script>
+</body>
+</html>

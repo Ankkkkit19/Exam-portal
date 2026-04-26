@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>All Results — ExamPortal</title>
+  <link rel="stylesheet" href="style.css"/>
+</head>
+<body class="dashboard">
+  <aside class="sidebar">
+    <div class="sidebar-logo"><div class="logo-icon">🎓</div><div><h2>ExamPortal</h2><span>Admin Panel</span></div></div>
+    <nav class="sidebar-nav">
+      <a href="admin-dashboard.html"><span class="nav-icon">📊</span>Dashboard</a>
+      <a href="manage-quizzes.html"><span class="nav-icon">📝</span>Manage Quizzes</a>
+      <a href="results.html" class="active"><span class="nav-icon">📈</span>All Results</a>
+    </nav>
+    <div class="sidebar-footer"><a href="#" id="logoutBtn"><span>🚪</span>Logout</a></div>
+  </aside>
+
+  <main class="main-content">
+    <div class="page-header">
+      <div><h1>All Results</h1><p>View every student's quiz performance</p></div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <h2>📊 Student Results</h2>
+        <div style="display:flex;gap:10px;align-items:center">
+          <input type="text" id="searchInput" placeholder="🔍 Search student or quiz..." style="padding:8px 14px;border:2px solid var(--border);border-radius:8px;font-size:13px;width:220px;outline:none"/>
+          <button class="btn btn-secondary btn-sm" onclick="loadResults()">🔄 Refresh</button>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th><th>Student Name</th><th>Roll No</th><th>Quiz</th>
+                <th>Score</th><th>Percentage</th><th>Status</th><th>Date</th>
+              </tr>
+            </thead>
+            <tbody id="resultsBody">
+              <tr><td colspan="8" style="text-align:center;padding:40px;color:var(--text-muted)">Loading...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    fetch('/api/auth/check-session').then(r=>r.json()).then(d=>{
+      if(!d.loggedIn||d.role!=='admin') location.href='/admin-login.html';
+    });
+    document.getElementById('logoutBtn').addEventListener('click',async e=>{e.preventDefault();await fetch('/api/auth/logout');location.href='/admin-login.html';});
+
+    let allResults = [];
+
+    async function loadResults(){
+      const res = await fetch('/api/results/all');
+      const d = await res.json();
+      allResults = d.results || [];
+      renderResults(allResults);
+    }
+
+    function renderResults(results){
+      const tbody = document.getElementById('resultsBody');
+      if(!results.length){
+        tbody.innerHTML='<tr><td colspan="8"><div class="empty-state"><div class="empty-icon">📭</div><h3>No results found</h3></div></td></tr>';
+        return;
+      }
+      tbody.innerHTML = results.map((r,i)=>{
+        const pct = Math.round((r.score/r.total)*100);
+        const passed = pct>=60;
+        const date = new Date(r.attempted_at).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+        return `<tr>
+          <td style="color:var(--text-muted);font-size:12px">${i+1}</td>
+          <td><strong>${r.student_name}</strong></td>
+          <td><span class="badge badge-primary">${r.roll_no}</span></td>
+          <td>${r.quiz_title}</td>
+          <td style="font-weight:700">${r.score}/${r.total}</td>
+          <td>
+            <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+            <span style="font-size:12px;color:var(--text-muted)">${pct}%</span>
+          </td>
+          <td><span class="badge ${passed?'badge-pass':'badge-fail'}">${passed?'✅ Pass':'❌ Fail'}</span></td>
+          <td style="font-size:12px;color:var(--text-muted)">${date}</td>
+        </tr>`;
+      }).join('');
+    }
+
+    document.getElementById('searchInput').addEventListener('input', e=>{
+      const q = e.target.value.toLowerCase();
+      renderResults(allResults.filter(r=>
+        r.student_name.toLowerCase().includes(q)||
+        r.roll_no.toLowerCase().includes(q)||
+        r.quiz_title.toLowerCase().includes(q)
+      ));
+    });
+
+    loadResults();
+  </script>
+</body>
+</html>

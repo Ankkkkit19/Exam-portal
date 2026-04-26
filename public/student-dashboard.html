@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Student Dashboard — ExamPortal</title>
+  <link rel="stylesheet" href="style.css"/>
+</head>
+<body class="dashboard">
+  <aside class="sidebar">
+    <div class="sidebar-logo"><div class="logo-icon">🎓</div><div><h2>ExamPortal</h2><span id="studentName">Student</span></div></div>
+    <nav class="sidebar-nav">
+      <a href="student-dashboard.html" class="active"><span class="nav-icon">🏠</span>Dashboard</a>
+      <a href="my-results.html"><span class="nav-icon">📊</span>My Results</a>
+    </nav>
+    <div class="sidebar-footer"><a href="#" id="logoutBtn"><span>🚪</span>Logout</a></div>
+  </aside>
+
+  <main class="main-content">
+    <div class="page-header">
+      <div><h1>Available Quizzes</h1><p>Select a quiz to begin your assessment</p></div>
+    </div>
+
+    <div id="quizContainer">
+      <div class="empty-state"><div class="empty-icon">⏳</div><h3>Loading quizzes...</h3></div>
+    </div>
+  </main>
+
+  <script>
+    let studentId;
+
+    fetch('/api/auth/check-session').then(r=>r.json()).then(d=>{
+      if(!d.loggedIn||d.role!=='student'){location.href='/student-login.html';return;}
+      studentId = d.student_id;
+      document.getElementById('studentName').textContent = d.student_name;
+      loadQuizzes();
+    });
+
+    document.getElementById('logoutBtn').addEventListener('click',async e=>{e.preventDefault();await fetch('/api/auth/logout');location.href='/student-login.html';});
+
+    async function loadQuizzes(){
+      const [quizRes, resultRes] = await Promise.all([
+        fetch('/api/quizzes'),
+        fetch('/api/results/student/'+studentId)
+      ]);
+      const quizData = await quizRes.json();
+      const resultData = await resultRes.json();
+
+      // Build set of attempted quiz IDs
+      const attempted = new Set((resultData.results||[]).map(r=>r.quiz_id));
+
+      const container = document.getElementById('quizContainer');
+      if(!quizData.quizzes||quizData.quizzes.length===0){
+        container.innerHTML='<div class="empty-state"><div class="empty-icon">📭</div><h3>No quizzes available yet</h3><p>Check back later.</p></div>';
+        return;
+      }
+      container.innerHTML='<div class="quiz-grid">'+quizData.quizzes.map(q=>{
+        const done = attempted.has(q.id);
+        return `<div class="quiz-card">
+          <div>
+            <h3>${q.title}</h3>
+            <div class="quiz-meta">
+              <span>📚 ${q.subject}</span>
+              <span>⏱ ${q.duration_mins} mins</span>
+              <span>❓ ${q.question_count} questions</span>
+            </div>
+            ${done ? '<span class="badge badge-pass" style="margin-top:4px">✅ Attempted</span>' : ''}
+          </div>
+          ${done
+            ? `<button class="btn btn-secondary" disabled style="cursor:not-allowed">Already Attempted</button>`
+            : `<a href="take-quiz.html?id=${q.id}" class="btn btn-primary">Start Quiz →</a>`
+          }
+        </div>`;
+      }).join('')+'</div>';
+    }
+  </script>
+</body>
+</html>

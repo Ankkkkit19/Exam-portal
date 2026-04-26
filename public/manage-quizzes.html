@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Manage Quizzes — ExamPortal</title>
+  <link rel="stylesheet" href="style.css"/>
+  <style>
+    .panel-grid { display: grid; grid-template-columns: 1fr 1.4fr; gap: 24px; }
+    @media(max-width:900px){ .panel-grid { grid-template-columns:1fr; } }
+    .expand-btn { background:none;border:none;cursor:pointer;font-size:18px;color:var(--primary); }
+    .questions-panel { display:none; padding:16px; border-top:1px solid var(--border); background:#f8f9ff; }
+    .questions-panel.open { display:block; }
+    .add-q-form { display:grid; gap:10px; }
+    .add-q-form .form-row { grid-template-columns:1fr 1fr; gap:10px; }
+  </style>
+</head>
+<body class="dashboard">
+  <aside class="sidebar">
+    <div class="sidebar-logo"><div class="logo-icon">🎓</div><div><h2>ExamPortal</h2><span>Admin Panel</span></div></div>
+    <nav class="sidebar-nav">
+      <a href="admin-dashboard.html"><span class="nav-icon">📊</span>Dashboard</a>
+      <a href="manage-quizzes.html" class="active"><span class="nav-icon">📝</span>Manage Quizzes</a>
+      <a href="results.html"><span class="nav-icon">📈</span>All Results</a>
+    </nav>
+    <div class="sidebar-footer"><a href="#" id="logoutBtn"><span>🚪</span>Logout</a></div>
+  </aside>
+
+  <main class="main-content">
+    <div class="page-header"><div><h1>Manage Quizzes</h1><p>Create quizzes and add questions</p></div></div>
+
+    <div class="panel-grid">
+      <!-- Create Quiz -->
+      <div>
+        <div class="card">
+          <div class="card-header"><h2>➕ Create New Quiz</h2></div>
+          <div class="card-body">
+            <form id="createQuizForm">
+              <div class="form-group"><label>Quiz Title</label><input type="text" id="q_title" placeholder="e.g. Mathematics Final Exam" required/></div>
+              <div class="form-group"><label>Subject</label><input type="text" id="q_subject" placeholder="e.g. Mathematics" required/></div>
+              <div class="form-group"><label>Duration (minutes)</label><input type="number" id="q_duration" min="1" max="300" placeholder="e.g. 30" required/></div>
+              <div id="createAlert" class="alert"></div>
+              <button type="submit" class="btn btn-primary">➕ Create Quiz</button>
+            </form>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quiz List -->
+      <div>
+        <div class="card">
+          <div class="card-header"><h2>📋 All Quizzes</h2><button class="btn btn-secondary btn-sm" onclick="loadQuizzes()">🔄 Refresh</button></div>
+          <div class="card-body" id="quizListContainer">
+            <div class="empty-state"><div class="empty-icon">⏳</div><h3>Loading quizzes...</h3></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Add Question Modal -->
+  <div class="modal-overlay" id="addQModal">
+    <div class="modal" style="max-width:560px;text-align:left;padding:32px;">
+      <h2 style="margin-bottom:6px">➕ Add Question</h2>
+      <p style="color:var(--text-muted);font-size:13px;margin-bottom:20px" id="modalQuizTitle"></p>
+      <form id="addQForm" class="add-q-form">
+        <input type="hidden" id="aq_quiz_id"/>
+        <div class="form-group"><label>Question Text</label><textarea id="aq_text" placeholder="Enter the question..." required></textarea></div>
+        <div class="form-row">
+          <div class="form-group"><label>Option A</label><input type="text" id="aq_a" required/></div>
+          <div class="form-group"><label>Option B</label><input type="text" id="aq_b" required/></div>
+          <div class="form-group"><label>Option C</label><input type="text" id="aq_c" required/></div>
+          <div class="form-group"><label>Option D</label><input type="text" id="aq_d" required/></div>
+        </div>
+        <div class="form-group">
+          <label>Correct Option</label>
+          <select id="aq_correct" required>
+            <option value="">-- Select --</option>
+            <option value="a">A</option><option value="b">B</option>
+            <option value="c">C</option><option value="d">D</option>
+          </select>
+        </div>
+        <div id="aqAlert" class="alert"></div>
+        <div style="display:flex;gap:12px;margin-top:8px">
+          <button type="submit" class="btn btn-primary" style="flex:1">Save Question</button>
+          <button type="button" class="btn btn-secondary" style="flex:1" onclick="closeModal()">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    fetch('/api/auth/check-session').then(r=>r.json()).then(d=>{
+      if(!d.loggedIn||d.role!=='admin') location.href='/admin-login.html';
+    });
+    document.getElementById('logoutBtn').addEventListener('click',async e=>{e.preventDefault();await fetch('/api/auth/logout');location.href='/admin-login.html';});
+
+    async function loadQuizzes(){
+      const res = await fetch('/api/quizzes');
+      const data = await res.json();
+      const container = document.getElementById('quizListContainer');
+      if(!data.quizzes||data.quizzes.length===0){
+        container.innerHTML='<div class="empty-state"><div class="empty-icon">📭</div><h3>No quizzes yet</h3><p>Create your first quiz on the left.</p></div>';
+        return;
+      }
+      container.innerHTML = '<div class="quiz-admin-list">'+data.quizzes.map(q=>`
+        <div style="border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;background:#fff">
+          <div class="quiz-admin-item">
+            <div class="info">
+              <h4>${q.title}</h4>
+              <p>${q.subject} &bull; ${q.duration_mins} mins &bull; ${q.question_count} questions</p>
+            </div>
+            <div class="quiz-actions">
+              <button class="btn btn-secondary btn-sm" onclick="openAddQuestion(${q.id},'${q.title.replace(/'/g,"\\'")}')">+ Question</button>
+              <button class="btn btn-secondary btn-sm" onclick="toggleQuestions(${q.id},this)">▼ View</button>
+              <button class="btn btn-danger btn-sm" onclick="deleteQuiz(${q.id})">🗑</button>
+            </div>
+          </div>
+          <div class="questions-panel" id="qpanel-${q.id}">
+            <div id="qlist-${q.id}"><em style="font-size:13px;color:var(--text-muted)">Click "View" to load questions</em></div>
+          </div>
+        </div>`).join('')+'</div>';
+    }
+
+    async function toggleQuestions(quizId, btn){
+      const panel = document.getElementById('qpanel-'+quizId);
+      const open = panel.classList.toggle('open');
+      btn.textContent = open ? '▲ Hide' : '▼ View';
+      if(open){
+        const res = await fetch('/api/questions/'+quizId);
+        const d = await res.json();
+        const listEl = document.getElementById('qlist-'+quizId);
+        if(!d.questions||d.questions.length===0){
+          listEl.innerHTML='<p style="font-size:13px;color:var(--text-muted)">No questions yet.</p>';
+        } else {
+          listEl.innerHTML='<div class="question-list">'+d.questions.map((q,i)=>`
+            <div class="question-item">
+              <span class="q-text">${i+1}. ${q.question_text}</span>
+              <span class="q-answer">✓ ${q.correct_option.toUpperCase()}</span>
+              <button class="btn btn-danger btn-sm btn-icon" onclick="deleteQuestion(${q.id},${quizId})">🗑</button>
+            </div>`).join('')+'</div>';
+        }
+      }
+    }
+
+    async function deleteQuiz(id){
+      if(!confirm('Delete this quiz and all its questions?')) return;
+      await fetch('/api/quizzes/delete/'+id, {method:'DELETE'});
+      loadQuizzes();
+    }
+
+    async function deleteQuestion(id, quizId){
+      if(!confirm('Delete this question?')) return;
+      await fetch('/api/questions/delete/'+id, {method:'DELETE'});
+      const panel = document.getElementById('qpanel-'+quizId);
+      if(panel.classList.contains('open')){
+        // reload questions
+        const btn = panel.previousElementSibling.querySelector('[onclick*="toggleQuestions"]');
+        panel.classList.remove('open');
+        toggleQuestions(quizId, btn);
+      }
+    }
+
+    function openAddQuestion(quizId, quizTitle){
+      document.getElementById('aq_quiz_id').value = quizId;
+      document.getElementById('modalQuizTitle').textContent = 'Quiz: '+quizTitle;
+      document.getElementById('addQForm').reset();
+      document.getElementById('aqAlert').className='alert';
+      document.getElementById('addQModal').classList.add('show');
+    }
+    function closeModal(){ document.getElementById('addQModal').classList.remove('show'); }
+    document.getElementById('addQModal').addEventListener('click',e=>{ if(e.target===e.currentTarget) closeModal(); });
+
+    document.getElementById('addQForm').addEventListener('submit',async e=>{
+      e.preventDefault();
+      const alert = document.getElementById('aqAlert');
+      const body = {
+        quiz_id: document.getElementById('aq_quiz_id').value,
+        question_text: document.getElementById('aq_text').value,
+        option_a: document.getElementById('aq_a').value,
+        option_b: document.getElementById('aq_b').value,
+        option_c: document.getElementById('aq_c').value,
+        option_d: document.getElementById('aq_d').value,
+        correct_option: document.getElementById('aq_correct').value
+      };
+      const res = await fetch('/api/questions/add',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+      const d = await res.json();
+      if(d.success){
+        alert.className='alert alert-success show'; alert.textContent='✅ Question added!';
+        document.getElementById('addQForm').reset();
+        document.getElementById('aq_quiz_id').value = body.quiz_id;
+        loadQuizzes();
+      } else {
+        alert.className='alert alert-error show'; alert.textContent='❌ '+d.message;
+      }
+    });
+
+    document.getElementById('createQuizForm').addEventListener('submit',async e=>{
+      e.preventDefault();
+      const alertEl = document.getElementById('createAlert');
+      const body = {
+        title: document.getElementById('q_title').value,
+        subject: document.getElementById('q_subject').value,
+        duration_mins: document.getElementById('q_duration').value
+      };
+      const res = await fetch('/api/quizzes/add',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+      const d = await res.json();
+      if(d.success){
+        alertEl.className='alert alert-success show'; alertEl.textContent='✅ Quiz created!';
+        document.getElementById('createQuizForm').reset();
+        loadQuizzes();
+      } else {
+        alertEl.className='alert alert-error show'; alertEl.textContent='❌ '+d.message;
+      }
+    });
+
+    loadQuizzes();
+  </script>
+</body>
+</html>

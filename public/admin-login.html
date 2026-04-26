@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Admin Login — ExamPortal</title>
+  <meta name="description" content="Admin login for ExamPortal management system."/>
+  <link rel="stylesheet" href="style.css"/>
+</head>
+<body class="auth-page">
+  <div class="auth-card">
+    <div class="auth-logo">
+      <div class="icon">🎓</div>
+      <div>
+        <h1>ExamPortal</h1>
+        <span>Admin Control Panel</span>
+      </div>
+    </div>
+    <h2>Welcome Back</h2>
+    <p class="subtitle">Sign in to manage quizzes and students</p>
+
+    <form id="loginForm">
+      <div class="form-group">
+        <label for="username">Username</label>
+        <input type="text" id="username" name="username" placeholder="Enter admin username" autocomplete="username" required/>
+      </div>
+      <div class="form-group">
+        <label for="password">Password</label>
+        <input type="password" id="password" name="password" placeholder="Enter password" autocomplete="current-password" required/>
+      </div>
+      <div id="alert" class="alert"></div>
+      <button type="submit" class="btn btn-primary" id="submitBtn">🔐 Sign In</button>
+    </form>
+
+    <div class="auth-footer">
+      <a href="/student-login.html">← Back to Student Login</a>
+    </div>
+  </div>
+
+  <script>
+    // Redirect if already logged in
+    fetch('/api/auth/check-session').then(r=>r.json()).then(d=>{
+      if(d.loggedIn && d.role==='admin') location.href='/admin-dashboard.html';
+    });
+
+    document.getElementById('loginForm').addEventListener('submit', async e => {
+      e.preventDefault();
+      const btn = document.getElementById('submitBtn');
+      const alert = document.getElementById('alert');
+      btn.innerHTML = '<div class="spinner"></div> Signing in...';
+      btn.disabled = true;
+      alert.className = 'alert';
+
+      const res = await fetch('/api/auth/admin-login', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({
+          username: document.getElementById('username').value,
+          password: document.getElementById('password').value
+        })
+      });
+      const data = await res.json();
+      if(data.success) {
+        alert.className='alert alert-success show'; alert.textContent='✅ Login successful! Redirecting...';
+        setTimeout(()=>location.href='/admin-dashboard.html', 800);
+      } else {
+        alert.className='alert alert-error show'; alert.textContent='❌ '+data.message;
+        btn.innerHTML='🔐 Sign In'; btn.disabled=false;
+      }
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Take Quiz — ExamPortal</title>
+  <link rel="stylesheet" href="style.css"/>
+  <style>
+    body { background: var(--bg); }
+    .quiz-container { max-width: 800px; margin: 0 auto; padding: 24px; }
+    .quiz-progress { text-align:center; color:rgba(255,255,255,0.8); font-size:13px; }
+    .submit-bar { background:var(--card); border-top:1px solid var(--border); padding:20px 32px; display:flex; align-items:center; justify-content:space-between; position:sticky; bottom:0; box-shadow: 0 -4px 20px rgba(0,0,0,0.08); }
+    .answered-count { font-size:14px; color:var(--text-muted); font-weight:500; }
+  </style>
+</head>
+<body>
+
+  <!-- Timer Bar -->
+  <div class="timer-bar" id="timerBar">
+    <div>
+      <div id="quizTitle" style="font-size:16px;font-weight:700">Loading quiz...</div>
+      <div class="quiz-progress" id="quizProgress"></div>
+    </div>
+    <div style="text-align:center">
+      <div style="font-size:11px;opacity:0.7;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px">Time Remaining</div>
+      <div class="timer-display" id="timerDisplay">--:--</div>
+    </div>
+    <a href="student-dashboard.html" style="color:rgba(255,255,255,0.6);font-size:13px;text-decoration:none">← Back</a>
+  </div>
+
+  <div class="quiz-container" id="quizContainer">
+    <div class="empty-state"><div class="empty-icon">⏳</div><h3>Loading questions...</h3></div>
+  </div>
+
+  <!-- Submit Bar -->
+  <div class="submit-bar" id="submitBar" style="display:none">
+    <div class="answered-count" id="answeredCount">0 / 0 answered</div>
+    <button class="btn btn-primary" id="submitBtn" onclick="submitQuiz()" style="width:auto;padding:12px 32px">
+      Submit Quiz ✅
+    </button>
+  </div>
+
+  <!-- Result Modal -->
+  <div class="modal-overlay" id="resultModal">
+    <div class="modal">
+      <div class="score-circle" id="scoreCircle">
+        <span id="scoreText">0/0</span>
+        <span id="pctText">0%</span>
+      </div>
+      <h2 id="resultTitle">Quiz Complete!</h2>
+      <p id="resultMsg"></p>
+      <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap">
+        <a href="my-results.html" class="btn btn-primary" style="width:auto">View My Results</a>
+        <a href="student-dashboard.html" class="btn btn-secondary" style="width:auto">Back to Dashboard</a>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const params = new URLSearchParams(location.search);
+    const quizId = params.get('id');
+    if(!quizId){ location.href='/student-dashboard.html'; }
+
+    let studentId, timerInterval, totalSeconds, questions=[], answers={};
+
+    // Auth check
+    fetch('/api/auth/check-session').then(r=>r.json()).then(d=>{
+      if(!d.loggedIn||d.role!=='student'){location.href='/student-login.html';return;}
+      studentId = d.student_id;
+      loadQuiz();
+    });
+
+    async function loadQuiz(){
+      // Load quiz info
+      const qRes = await fetch('/api/quizzes');
+      const qData = await qRes.json();
+      const quiz = (qData.quizzes||[]).find(q=>q.id==quizId);
+      if(!quiz){ document.getElementById('quizContainer').innerHTML='<div class="empty-state"><h3>Quiz not found.</h3></div>'; return; }
+
+      document.getElementById('quizTitle').textContent = quiz.title + ' — ' + quiz.subject;
+      document.title = quiz.title + ' — ExamPortal';
+      totalSeconds = quiz.duration_mins * 60;
+      startTimer(totalSeconds);
+
+      // Load questions
+      const res = await fetch('/api/questions/'+quizId);
+      const d = await res.json();
+      questions = d.questions || [];
+
+      if(!questions.length){
+        document.getElementById('quizContainer').innerHTML='<div class="empty-state"><div class="empty-icon">📭</div><h3>No questions available for this quiz.</h3></div>';
+        return;
+      }
+
+      renderQuestions();
+      document.getElementById('submitBar').style.display='flex';
+      document.getElementById('quizProgress').textContent = questions.length+' questions';
+    }
+
+    function renderQuestions(){
+      const container = document.getElementById('quizContainer');
+      container.innerHTML = questions.map((q,i)=>`
+        <div class="question-card" id="qcard-${q.id}">
+          <div class="question-number">Question ${i+1} of ${questions.length}</div>
+          <div class="question-text">${q.question_text}</div>
+          <div class="options">
+            ${['a','b','c','d'].map(opt=>`
+              <label class="option-label" id="opt-${q.id}-${opt}">
+                <input type="radio" name="q${q.id}" value="${opt}" onchange="selectAnswer(${q.id},'${opt}')"/>
+                <span style="font-weight:700;color:var(--primary);min-width:20px">${opt.toUpperCase()}.</span>
+                <span>${q['option_'+opt]}</span>
+              </label>`).join('')}
+          </div>
+        </div>`).join('');
+      updateAnsweredCount();
+    }
+
+    function selectAnswer(qId, opt){
+      answers[qId] = opt;
+      // Highlight selected option
+      ['a','b','c','d'].forEach(o=>{
+        const el = document.getElementById('opt-'+qId+'-'+o);
+        if(el) el.classList.toggle('selected', o===opt);
+      });
+      updateAnsweredCount();
+    }
+
+    function updateAnsweredCount(){
+      const count = Object.keys(answers).length;
+      document.getElementById('answeredCount').textContent = count+' / '+questions.length+' answered';
+    }
+
+    function startTimer(seconds){
+      updateTimerDisplay(seconds);
+      timerInterval = setInterval(()=>{
+        seconds--;
+        updateTimerDisplay(seconds);
+        if(seconds<=0){ clearInterval(timerInterval); autoSubmit(); }
+      },1000);
+    }
+
+    function updateTimerDisplay(s){
+      const min = Math.floor(s/60).toString().padStart(2,'0');
+      const sec = (s%60).toString().padStart(2,'0');
+      const el = document.getElementById('timerDisplay');
+      el.textContent = min+':'+sec;
+      el.className = 'timer-display';
+      if(s<=60) el.classList.add('danger');
+      else if(s<=300) el.classList.add('warning');
+    }
+
+    function autoSubmit(){
+      document.getElementById('timerDisplay').textContent = '00:00';
+      submitQuiz(true);
+    }
+
+    async function submitQuiz(auto=false){
+      if(!auto && !confirm('Submit quiz? You cannot change answers after submission.')) return;
+      clearInterval(timerInterval);
+
+      const btn = document.getElementById('submitBtn');
+      btn.innerHTML='<div class="spinner"></div> Submitting...'; btn.disabled=true;
+
+      const res = await fetch('/api/results/submit',{
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({quiz_id: parseInt(quizId), answers})
+      });
+      const d = await res.json();
+
+      if(d.success){
+        showResult(d);
+      } else {
+        alert('Error: '+d.message);
+        btn.innerHTML='Submit Quiz ✅'; btn.disabled=false;
+      }
+    }
+
+    function showResult(d){
+      const circle = document.getElementById('scoreCircle');
+      circle.className = 'score-circle '+(d.passed?'pass':'fail');
+      document.getElementById('scoreText').textContent = d.score+'/'+d.total;
+      document.getElementById('pctText').textContent = d.percentage+'%';
+      document.getElementById('resultTitle').textContent = d.passed ? '🎉 Well Done!' : '😔 Better Luck Next Time';
+      document.getElementById('resultMsg').textContent = d.passed
+        ? `You scored ${d.score} out of ${d.total} (${d.percentage}%). You have passed this quiz!`
+        : `You scored ${d.score} out of ${d.total} (${d.percentage}%). You need 60% to pass.`;
+      document.getElementById('resultModal').classList.add('show');
+    }
+  </script>
+</body>
+</html>

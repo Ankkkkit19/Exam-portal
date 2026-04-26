@@ -1,0 +1,21 @@
+# Dependencies
+node_modules/
+
+# SQLite database (runtime file, auto-created on first run)
+*.db
+*.db-shm
+*.db-wal
+
+# Logs
+npm-debug.log*
+nodemon-debug.log*
+logs/
+*.log
+
+# Environment
+.env
+.env.local
+
+# OS
+.DS_Store
+Thumbs.db

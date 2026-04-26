@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>My Results — ExamPortal</title>
+  <link rel="stylesheet" href="style.css"/>
+</head>
+<body class="dashboard">
+  <aside class="sidebar">
+    <div class="sidebar-logo"><div class="logo-icon">🎓</div><div><h2>ExamPortal</h2><span id="studentName">Student</span></div></div>
+    <nav class="sidebar-nav">
+      <a href="student-dashboard.html"><span class="nav-icon">🏠</span>Dashboard</a>
+      <a href="my-results.html" class="active"><span class="nav-icon">📊</span>My Results</a>
+    </nav>
+    <div class="sidebar-footer"><a href="#" id="logoutBtn"><span>🚪</span>Logout</a></div>
+  </aside>
+
+  <main class="main-content">
+    <div class="page-header"><div><h1>My Results</h1><p>Your quiz performance history</p></div></div>
+
+    <!-- Summary Cards -->
+    <div class="stats-grid" id="summaryCards" style="display:none">
+      <div class="stat-card">
+        <div class="stat-icon blue">📝</div>
+        <div><div class="stat-value" id="totalAttempts">0</div><div class="stat-label">Quizzes Taken</div></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon green">✅</div>
+        <div><div class="stat-value" id="totalPassed">0</div><div class="stat-label">Passed</div></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon orange">📈</div>
+        <div><div class="stat-value" id="avgPct">—</div><div class="stat-label">Average Score</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><h2>📋 Result History</h2></div>
+      <div class="card-body">
+        <div id="resultsContainer">
+          <div class="empty-state"><div class="empty-icon">⏳</div><h3>Loading results...</h3></div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    let studentId;
+
+    fetch('/api/auth/check-session').then(r=>r.json()).then(d=>{
+      if(!d.loggedIn||d.role!=='student'){location.href='/student-login.html';return;}
+      studentId = d.student_id;
+      document.getElementById('studentName').textContent = d.student_name;
+      loadResults();
+    });
+    document.getElementById('logoutBtn').addEventListener('click',async e=>{e.preventDefault();await fetch('/api/auth/logout');location.href='/student-login.html';});
+
+    async function loadResults(){
+      const res = await fetch('/api/results/student/'+studentId);
+      const d = await res.json();
+      const results = d.results||[];
+      const container = document.getElementById('resultsContainer');
+
+      if(!results.length){
+        container.innerHTML='<div class="empty-state"><div class="empty-icon">📭</div><h3>No results yet</h3><p>Go take a quiz to see your results here!</p><a href="student-dashboard.html" class="btn btn-primary" style="width:auto;margin-top:16px">Browse Quizzes</a></div>';
+        return;
+      }
+
+      // Summary
+      const passed = results.filter(r=>Math.round((r.score/r.total)*100)>=60).length;
+      const avg = Math.round(results.reduce((a,r)=>a+Math.round((r.score/r.total)*100),0)/results.length);
+      document.getElementById('totalAttempts').textContent = results.length;
+      document.getElementById('totalPassed').textContent = passed;
+      document.getElementById('avgPct').textContent = avg+'%';
+      document.getElementById('summaryCards').style.display='grid';
+
+      // Result cards
+      container.innerHTML = '<div style="display:flex;flex-direction:column;gap:16px">'+results.map(r=>{
+        const pct = Math.round((r.score/r.total)*100);
+        const pass = pct>=60;
+        const date = new Date(r.attempted_at).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+        return `<div style="border:1px solid var(--border);border-radius:var(--radius-sm);padding:20px;display:flex;align-items:center;gap:20px;background:#fff;transition:transform 0.2s" onmouseenter="this.style.transform='translateY(-2px)'" onmouseleave="this.style.transform=''">
+          <div style="width:64px;height:64px;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;background:${pass?'linear-gradient(135deg,#2e7d32,#43a047)':'linear-gradient(135deg,#c62828,#e53935)'};color:#fff;font-weight:800;font-size:15px;flex-shrink:0">
+            ${r.score}/${r.total}
+          </div>
+          <div style="flex:1">
+            <h4 style="font-size:15px;font-weight:700;color:var(--primary);margin-bottom:4px">${r.quiz_title}</h4>
+            <p style="font-size:12px;color:var(--text-muted)">${r.subject} &bull; ${date}</p>
+            <div class="progress-bar" style="margin-top:8px"><div class="progress-fill" style="width:${pct}%"></div></div>
+          </div>
+          <div style="text-align:right;flex-shrink:0">
+            <span class="badge ${pass?'badge-pass':'badge-fail'}" style="font-size:14px;padding:6px 14px">${pct}%</span>
+            <div style="font-size:12px;color:var(--text-muted);margin-top:4px">${pass?'✅ Passed':'❌ Failed'}</div>
+          </div>
+        </div>`;
+      }).join('')+'</div>';
+    }
+  </script>
+</body>
+</html>
